@@ -46,6 +46,20 @@ pipeline {
                 }
             }
         }
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonarqube-local') {
+                    sh """
+                    mvn clean verify sonar:sonar \
+                        -Dsonar.projectKey=student-management \
+                        -Dsonar.projectName=student-management \
+                        -Dsonar.host.url=$SONAR_HOST_URL \
+                        -Dsonar.token=$SONAR_AUTH_TOKEN
+                    """
+                }
+            }
+        }
+
     }
 
     post {
