@@ -2,51 +2,55 @@ pipeline {
     agent any
 
     tools {
-        maven 'Maven3'   // configure this name in Jenkins Tools
-        jdk 'JDK17'      // configure this name in Jenkins Tools
+        jdk 'JDK17'
+        maven 'Maven3'
     }
 
-    options {
-        timestamps()
-        disableConcurrentBuilds()
+    environment {
+        DOCKER_IMAGE = "bahrirayen/student-management"
+        DOCKER_TAG   = "${env.BUILD_NUMBER}"
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Build (skip tests)') {
+        stage('Build JAR') {
             steps {
-                sh "mvn -B clean package -DskipTests"
+                sh 'mvn -B clean package -DskipTests'
             }
         }
 
-        stage('Archive Jar') {
+        stage('Docker Build') {
             steps {
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} -t ${DOCKER_IMAGE}:latest ."
             }
         }
 
-        // ---------- LATER ----------
-        // SonarQube stage goes here
-        // Docker build/push stages go here
-        // Kubernetes deploy stage goes here
-        // ---------------------------
+        stage('Docker Push') {
+            steps {
+                withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh """
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker push ${DOCKER_IMAGE}:latest
+                    """
+                }
+            }
+        }
     }
 
     post {
-        success {
-            echo "✅ Build succeeded (tests skipped)"
-        }
-        failure {
-            echo "❌ Build failed"
-        }
         always {
-            cleanWs()
+            sh 'docker logout || true'
         }
     }
 }
-
